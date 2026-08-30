@@ -1,6 +1,6 @@
 import { imageUrl } from '../api/client.js';
 
-export default function Card({ card, onClick, selected, crown, disabled, title }) {
+export default function Card({ card, onClick, selected, crown, disabled, title, draggable, onDragStart, onDragEnd }) {
   const classes = ['card'];
   if (card.dragon) classes.push('card-dragon');
   if (selected) classes.push('card-selected');
@@ -16,6 +16,9 @@ export default function Card({ card, onClick, selected, crown, disabled, title }
       style={{ '--card-border': borderColor }}
       onClick={!disabled ? onClick : undefined}
       title={title}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
     >
       {img ? (
         <img className="card-img" src={img} alt={card.name} draggable={false} />

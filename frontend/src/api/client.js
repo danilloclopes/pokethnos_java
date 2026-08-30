@@ -20,7 +20,7 @@ async function request(path, { method = 'GET', body } = {}) {
 }
 
 export const api = {
-  createGame: (playerNames) => request('/api/games', { method: 'POST', body: { playerNames } }),
+  createGame: (playerNames, avatars) => request('/api/games', { method: 'POST', body: { playerNames, avatars } }),
   getGame: (id) => request(`/api/games/${id}`),
   acknowledgePass: (id) => request(`/api/games/${id}/actions/acknowledge-pass`, { method: 'POST' }),
   continueAfterScoring: (id) => request(`/api/games/${id}/actions/continue-after-scoring`, { method: 'POST' }),

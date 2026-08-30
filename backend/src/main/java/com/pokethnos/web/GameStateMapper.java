@@ -1,23 +1,29 @@
 package com.pokethnos.web;
 
+import com.pokethnos.domain.Bando;
 import com.pokethnos.domain.Carta;
 import com.pokethnos.domain.CartaDragao;
 import com.pokethnos.domain.CartaPokemon;
 import com.pokethnos.domain.Jogador;
+import com.pokethnos.domain.MarcadorColocado;
 import com.pokethnos.domain.Regiao;
 import com.pokethnos.engine.EraSummary;
 import com.pokethnos.engine.GameData;
 import com.pokethnos.engine.GerenciadorJogo;
 import com.pokethnos.engine.PendingDecision;
 import com.pokethnos.engine.TurnContext;
+import com.pokethnos.engine.TurnSummary;
+import com.pokethnos.web.dto.BandDto;
 import com.pokethnos.web.dto.CardDto;
 import com.pokethnos.web.dto.DragonDto;
 import com.pokethnos.web.dto.EraSummaryDto;
 import com.pokethnos.web.dto.FinalStandingDto;
 import com.pokethnos.web.dto.GameStateDto;
+import com.pokethnos.web.dto.MarkerDto;
 import com.pokethnos.web.dto.PendingDecisionDto;
 import com.pokethnos.web.dto.PlayerDto;
 import com.pokethnos.web.dto.RegionDto;
+import com.pokethnos.web.dto.TurnSummaryDto;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -47,11 +53,27 @@ public class GameStateMapper {
         dto.currentPlayerId = current.getId();
         dto.currentPlayerName = current.getNome();
         dto.currentPlayerColor = current.getCor();
+        dto.currentPlayerAvatar = current.getAvatar();
 
         dto.deckCount = jogo.deck().size();
         dto.tableCards = jogo.tableCards().stream().map(this::cardDto).toList();
         dto.hand = current.getMao().stream().map(c -> (CardDto) cardDto(c)).toList();
-        dto.band = jogo.getBandoAtual().getCartas().stream().map(c -> (CardDto) cardDto(c)).toList();
+        /*
+         * O "Bando em formação" só existe enquanto ele está sendo montado ou
+         * o Líder sendo escolhido.
+         *
+         * Depois de jogado, o bando permanece em `bandoAtual` porque o motor
+         * ainda o consulta para retomar decisões pendentes (ver
+         * requireLeaderInBand). Expor isso fazia as cartas reaparecerem na
+         * área de formação logo depois de voarem para a Região — visível
+         * sobretudo no Golpe Duplo, cujo modal segura a tela nesse intervalo.
+         */
+        boolean formingBand = jogo.getTurnState() == GerenciadorJogo.TurnState.BUILDING_BAND
+                || jogo.getPendingDecision() == PendingDecision.CHOOSE_LEADER
+                || jogo.getPendingDecision() == PendingDecision.CHOOSE_LEADER_SECOND;
+        dto.band = formingBand
+                ? jogo.getBandoAtual().getCartas().stream().map(c -> (CardDto) cardDto(c)).toList()
+                : List.of();
 
         dto.regions = jogo.getTabuleiro().getRegioes().stream().map(r -> regionDto(jogo, r)).toList();
         dto.players = jogo.getJogadores().stream().map(p -> playerDto(jogo, p)).toList();
@@ -65,6 +87,8 @@ public class GameStateMapper {
 
         dto.statusMessage = statusMessage(jogo);
         dto.pendingDecision = pendingDecisionDto(jogo);
+        dto.turnSummary = turnSummaryDto(jogo.getTurnSummary());
+        dto.currentPlayerBands = current.getBandos().stream().map(this::bandDto).toList();
 
         if (jogo.getPhase() == GerenciadorJogo.Phase.SCORING && jogo.getLastEraSummary() != null) {
             dto.eraSummary = eraSummaryDto(jogo, jogo.getLastEraSummary());
@@ -73,6 +97,29 @@ public class GameStateMapper {
             dto.finalStandings = finalStandings(jogo);
         }
 
+        return dto;
+    }
+
+    // ── resumo de fim de turno ────────────────────────────────
+    private TurnSummaryDto turnSummaryDto(TurnSummary s) {
+        if (s == null) return null;
+        TurnSummaryDto dto = new TurnSummaryDto();
+        dto.playerId = s.playerId;
+        dto.playerName = s.playerName;
+        dto.playerColor = s.playerColor;
+        dto.playerAvatar = s.playerAvatar;
+        dto.fromDeck = s.fromDeck;
+        dto.gainedCard = s.gainedCard != null ? cardDto(s.gainedCard) : null;
+        dto.hand = s.hand.stream().map(c -> (CardDto) cardDto(c)).toList();
+        dto.bands = s.bands.stream().map(this::bandDto).toList();
+        return dto;
+    }
+
+    private BandDto bandDto(Bando b) {
+        BandDto dto = new BandDto();
+        dto.cards = b.getCartas().stream().map(c -> (CardDto) cardDto(c)).toList();
+        dto.leaderId = b.lider() != null ? b.lider().getId() : null;
+        dto.leaderName = b.lider() != null ? b.lider().getNome() : null;
         return dto;
     }
 
@@ -106,6 +153,24 @@ public class GameStateMapper {
         dto.tokens = r.tokens(jogo.isIs23());
         dto.markers = new java.util.LinkedHashMap<>();
         for (Jogador p : jogo.getJogadores()) dto.markers.put(p.getId(), p.getMarcadores(r.getId()));
+
+        // um item por marcador, na ordem em que foram plantados
+        dto.markerList = new ArrayList<>();
+        for (Jogador p : jogo.getJogadores()) {
+            for (MarcadorColocado mc : p.getMarcadoresColocados()) {
+                if (!mc.getRegiaoId().equals(r.getId())) continue;
+                MarkerDto md = new MarkerDto();
+                md.playerId = p.getId();
+                md.playerName = p.getNome();
+                md.playerColor = p.getCor();
+                md.playerAvatar = p.getAvatar();
+                md.era = mc.getEra();
+                md.leaderId = mc.getLiderId();
+                md.leaderName = mc.getLiderNome();
+                md.cards = mc.getCartas().stream().map(c -> (CardDto) cardDto(c)).toList();
+                dto.markerList.add(md);
+            }
+        }
         return dto;
     }
 
@@ -118,6 +183,7 @@ public class GameStateMapper {
         dto.handCount = p.getMao().size();
         dto.totalMarkers = p.totalMarcadores();
         dto.current = p.getId() == jogo.currentPlayer().getId();
+        dto.avatar = p.getAvatar();
         return dto;
     }
 

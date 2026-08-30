@@ -35,7 +35,7 @@ public class GameController {
 
     @PostMapping
     public GameStateDto createGame(@Valid @RequestBody CreateGameRequest req) {
-        return mapper.toDto(gameService.createGame(req.playerNames));
+        return mapper.toDto(gameService.createGame(req.playerNames, req.avatars));
     }
 
     @GetMapping("/{gameId}")

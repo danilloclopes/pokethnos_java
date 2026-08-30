@@ -15,7 +15,16 @@ export default function PoisonModal({ decision, onConfirm }) {
   }
 
   return (
-    <ModalShell title="☠ VENENO">
+    <ModalShell
+      title="☠ VENENO"
+      footer={
+        <div className="modal-btns">
+          <button className="btn-modal gold-btn" onClick={() => onConfirm(selected)}>
+            CONFIRMAR
+          </button>
+        </div>
+      }
+    >
       <p>Escolha até {max} carta(s) da mesa para remover desta Era.</p>
       <div className="selectable-card-row">
         <CardRow
@@ -24,11 +33,6 @@ export default function PoisonModal({ decision, onConfirm }) {
           onCardClick={toggle}
           emptyLabel="Nenhuma carta disponível na mesa."
         />
-      </div>
-      <div className="modal-btns">
-        <button className="btn-modal gold-btn" onClick={() => onConfirm(selected)}>
-          CONFIRMAR
-        </button>
       </div>
     </ModalShell>
   );

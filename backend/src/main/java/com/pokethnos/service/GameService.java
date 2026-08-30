@@ -5,6 +5,7 @@ import com.pokethnos.domain.Carta;
 import com.pokethnos.domain.CartaDragao;
 import com.pokethnos.domain.CartaPokemon;
 import com.pokethnos.domain.Jogador;
+import com.pokethnos.domain.MarcadorColocado;
 import com.pokethnos.domain.Regiao;
 import com.pokethnos.domain.Tabuleiro;
 import com.pokethnos.engine.GameData;
@@ -12,6 +13,7 @@ import com.pokethnos.engine.GerenciadorJogo;
 import com.pokethnos.engine.PendingDecision;
 import com.pokethnos.engine.ScoringService;
 import com.pokethnos.engine.TurnContext;
+import com.pokethnos.engine.TurnSummary;
 import com.pokethnos.exception.GameNotFoundException;
 import com.pokethnos.exception.InvalidActionException;
 import com.pokethnos.strategy.FlowResult;
@@ -44,6 +46,10 @@ public class GameService {
 
     // ── ciclo de vida ────────────────────────────────────────
     public GerenciadorJogo createGame(List<String> playerNames) {
+        return createGame(playerNames, null);
+    }
+
+    public GerenciadorJogo createGame(List<String> playerNames, List<Integer> avatars) {
         if (playerNames == null || playerNames.size() < 2 || playerNames.size() > 6) {
             throw new InvalidActionException("O jogo suporta de 2 a 6 jogadores.");
         }
@@ -68,6 +74,10 @@ public class GameService {
         for (int i = 0; i < n; i++) {
             Jogador j = new Jogador(i, playerNames.get(i).isBlank() ? ("Jogador " + (i + 1)) : playerNames.get(i),
                     GameData.PLAYER_COLORS[i]);
+            // sem escolha explícita, cada jogador fica com o treinador do próprio índice
+            int avatar = (avatars != null && i < avatars.size() && avatars.get(i) != null)
+                    ? avatars.get(i) : i;
+            j.setAvatar(Math.floorMod(avatar, GameData.TRAINER_COUNT));
             j.inicializarMarcadores(regioes);
             jogadores.add(j);
         }
@@ -93,6 +103,7 @@ public class GameService {
     public GerenciadorJogo acknowledgePass(String gameId) {
         GerenciadorJogo jogo = getGame(gameId);
         jogo.setWaitingPass(false);
+        jogo.setTurnSummary(null); // o resumo do turno anterior já foi visto
         return jogo;
     }
 
@@ -126,6 +137,10 @@ public class GameService {
             triggerScoringIfEraEnding(jogo);
             return jogo; // dragão revelou — a Era encerrou, o turno não avança
         }
+        // a carta comprada é a última que entrou na mão — guardada para o
+        // resumo, já que o jogador sacou às cegas e precisa ver o que veio
+        jogo.setLastGainedCard(p.getMao().get(p.getMao().size() - 1));
+        jogo.setLastGainedFromDeck(true);
         jogo.log(p.getNome() + " sacou do Deck.");
         endTurn(jogo);
         return jogo;
@@ -141,6 +156,8 @@ public class GameService {
         Carta card = removeById(jogo.tableCards(), cardId);
         if (card == null) throw new InvalidActionException("Carta não encontrada na mesa.");
         p.getMao().add((CartaPokemon) card);
+        jogo.setLastGainedCard((CartaPokemon) card);
+        jogo.setLastGainedFromDeck(false);
         jogo.log(p.getNome() + " recrutou " + card.getNome() + " da mesa.");
         endTurn(jogo);
         return jogo;
@@ -442,6 +459,7 @@ public class GameService {
         boolean canPlace = effectiveBandSize > p.getMarcadores(leaderRegion);
         if (canPlace) {
             p.adicionarMarcador(leaderRegion);
+            registrarProcedencia(jogo, p, leaderRegion);
             jogo.log(p.getNome() + " (2°Bando) colocou marcador em " + regionName(jogo, leaderRegion) + ".");
         }
         jogo.log(p.getNome() + " jogou 2° Bando de " + bandSize + " carta(s).");
@@ -473,7 +491,28 @@ public class GameService {
     }
 
     // ── fim de turno / passagem de vez ────────────────────────
+    /**
+     * Retrato do jogador que acabou de agir, tirado antes de o índice avançar —
+     * depois disso a mão e as equipes dele não seriam mais visíveis pelo DTO.
+     */
+    private void captureTurnSummary(GerenciadorJogo jogo) {
+        Jogador p = jogo.currentPlayer();
+        TurnSummary s = new TurnSummary();
+        s.playerId = p.getId();
+        s.playerName = p.getNome();
+        s.playerColor = p.getCor();
+        s.playerAvatar = p.getAvatar();
+        s.gainedCard = jogo.getLastGainedCard();
+        s.fromDeck = jogo.isLastGainedFromDeck();
+        s.hand = new ArrayList<>(p.getMao());
+        s.bands = new ArrayList<>(p.getBandos());
+        jogo.setTurnSummary(s);
+        jogo.setLastGainedCard(null);
+        jogo.setLastGainedFromDeck(false);
+    }
+
     private void endTurn(GerenciadorJogo jogo) {
+        captureTurnSummary(jogo);
         jogo.setTurnState(GerenciadorJogo.TurnState.CHOOSE);
         jogo.setBandoAtual(new Bando());
         jogo.setLeaderCardId(null);
@@ -574,9 +613,23 @@ public class GameService {
         return size;
     }
 
+    /**
+     * Guarda qual Bando plantou o marcador. Os dois pontos de colocação
+     * acontecem logo depois de jogarBando(), então o Bando de origem é sempre
+     * o último da lista do jogador.
+     */
+    private void registrarProcedencia(GerenciadorJogo jogo, Jogador p, String regionId) {
+        List<Bando> bandos = p.getBandos();
+        if (bandos.isEmpty()) return;
+        Bando b = bandos.get(bandos.size() - 1);
+        p.getMarcadoresColocados().add(
+                new MarcadorColocado(regionId, jogo.getEra(), b.getCartas(), b.lider()));
+    }
+
     private void placeMarkerIfChosen(GerenciadorJogo jogo, Jogador p, String regionId) {
         if (regionId != null) {
             p.adicionarMarcador(regionId);
+            registrarProcedencia(jogo, p, regionId);
             jogo.log(p.getNome() + " colocou marcador em " + regionName(jogo, regionId) + ".");
         } else {
             jogo.log(p.getNome() + " não colocou marcador.");

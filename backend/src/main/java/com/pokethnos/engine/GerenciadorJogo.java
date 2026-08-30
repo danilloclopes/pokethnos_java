@@ -37,6 +37,12 @@ public class GerenciadorJogo {
     private boolean waitingPass = false; // "tela de passar o dispositivo"
 
     private List<CartaDragao> dragonsSeen = new ArrayList<>();
+
+    /** Carta recrutada no turno corrente, consumida ao fechar o turno. */
+    private com.pokethnos.domain.CartaPokemon lastGainedCard;
+    private boolean lastGainedFromDeck;
+    /** Retrato do último turno encerrado (ver TurnSummary). */
+    private TurnSummary turnSummary;
     private List<Carta> masterPokemon = new ArrayList<>();
     private List<CartaDragao> masterDragons = new ArrayList<>();
     private List<List<Integer>> tokens = new ArrayList<>();
@@ -84,6 +90,13 @@ public class GerenciadorJogo {
     public void setWaitingPass(boolean waitingPass) { this.waitingPass = waitingPass; }
 
     public List<CartaDragao> getDragonsSeen() { return dragonsSeen; }
+
+    public com.pokethnos.domain.CartaPokemon getLastGainedCard() { return lastGainedCard; }
+    public void setLastGainedCard(com.pokethnos.domain.CartaPokemon c) { this.lastGainedCard = c; }
+    public boolean isLastGainedFromDeck() { return lastGainedFromDeck; }
+    public void setLastGainedFromDeck(boolean b) { this.lastGainedFromDeck = b; }
+    public TurnSummary getTurnSummary() { return turnSummary; }
+    public void setTurnSummary(TurnSummary s) { this.turnSummary = s; }
 
     public List<Carta> getMasterPokemon() { return masterPokemon; }
     public void setMasterPokemon(List<Carta> masterPokemon) { this.masterPokemon = masterPokemon; }

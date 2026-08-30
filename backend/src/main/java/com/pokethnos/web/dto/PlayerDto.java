@@ -8,4 +8,5 @@ public class PlayerDto {
     public int handCount;
     public int totalMarkers;
     public boolean current;
+    public int avatar;
 }

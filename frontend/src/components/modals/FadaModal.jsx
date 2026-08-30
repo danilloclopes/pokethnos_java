@@ -15,15 +15,19 @@ export default function FadaModal({ decision, onConfirm }) {
   }
 
   return (
-    <ModalShell title="✨ MAGIA ENCANTADORA">
+    <ModalShell
+      title="✨ MAGIA ENCANTADORA"
+      footer={
+        <div className="modal-btns">
+          <button className="btn-modal gold-btn" onClick={() => onConfirm(selected)}>
+            CONFIRMAR
+          </button>
+        </div>
+      }
+    >
       <p>Você pode manter até {max} carta(s) na mão. Selecione quais manter.</p>
       <div className="selectable-card-row">
         <CardRow cards={decision.fadaOptions} selectedIds={selected} onCardClick={toggle} />
-      </div>
-      <div className="modal-btns">
-        <button className="btn-modal gold-btn" onClick={() => onConfirm(selected)}>
-          CONFIRMAR
-        </button>
       </div>
     </ModalShell>
   );

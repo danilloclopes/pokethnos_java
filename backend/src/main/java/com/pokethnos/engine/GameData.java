@@ -89,6 +89,9 @@ public final class GameData {
             {2, 4},
     };
 
+    /** Quantidade de treinadores na prancha de sprites (grid 3x2). */
+    public static final int TRAINER_COUNT = 6;
+
     public static final String[] PLAYER_COLORS = {
             "#E53935", "#1E88E5", "#43A047", "#FB8C00", "#8E24AA", "#00ACC1"
     };
