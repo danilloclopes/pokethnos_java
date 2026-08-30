@@ -618,22 +618,6 @@ button { font-family: inherit; cursor: pointer; font-weight: 800; }
   * { transition: none !important; animation: none !important; }
 }
 
-/* ═══════════════════════ RETOMANDO PARTIDA ═══════════════════════ */
-.restoring { display: flex; flex-direction: column; align-items: center; gap: 18px; }
-.restoring-ball {
-  width: 54px; height: 54px; border-radius: 50%;
-  background:
-    radial-gradient(circle at 50% 50%, #fff 0 9px, #22303F 9px 13px, transparent 13px),
-    linear-gradient(180deg, var(--red) 0 calc(50% - 4px), #22303F calc(50% - 4px) calc(50% + 4px), #fff calc(50% + 4px) 100%);
-  box-shadow: 0 0 0 3px #22303F, var(--shadow-md);
-  animation: ball-spin 1.1s ease-in-out infinite;
-}
-@keyframes ball-spin {
-  0%, 100% { transform: rotate(-14deg); }
-  50%      { transform: rotate(14deg); }
-}
-.restoring-text { color: var(--ink-soft); font-weight: 800; font-size: 0.95rem; }
-
 /* ═══════════════════════ CARTA EM VOO ═══════════════════════ */
 /* clone que viaja da mesa até a mão; acima de tudo, mas sem receber cliques */
 .flying-card {
