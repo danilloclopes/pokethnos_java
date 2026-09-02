@@ -28,7 +28,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /** Traduz o estado interno (GerenciadorJogo) para o DTO consumido pelo React — equivalente a js/render.js. */
 @Component
@@ -296,10 +298,34 @@ public class GameStateMapper {
     }
 
     private List<FinalStandingDto> finalStandings(GerenciadorJogo jogo) {
+        // playerId -> tamanhos dos Bandos jogados na última Era, do maior para o menor
+        // (usado como 3º critério de desempate: regras.html "Empate final")
+        Map<Integer, List<Integer>> lastEraBandSizes = new HashMap<>();
+        List<Jogador> jogadores = jogo.getJogadores();
+        List<List<Integer>> bandsPlayed = jogo.getBandsPlayedThisEra();
+        for (int i = 0; i < jogadores.size(); i++) {
+            List<Integer> sizes = new ArrayList<>(bandsPlayed.get(i));
+            sizes.sort(Comparator.reverseOrder());
+            lastEraBandSizes.put(jogadores.get(i).getId(), sizes);
+        }
+
+        Comparator<Jogador> byLastEraBands = (p1, p2) -> {
+            List<Integer> a = lastEraBandSizes.getOrDefault(p1.getId(), List.of());
+            List<Integer> b = lastEraBandSizes.getOrDefault(p2.getId(), List.of());
+            int n = Math.max(a.size(), b.size());
+            for (int i = 0; i < n; i++) {
+                int av = i < a.size() ? a.get(i) : 0;
+                int bv = i < b.size() ? b.get(i) : 0;
+                if (av != bv) return Integer.compare(bv, av);
+            }
+            return 0;
+        };
+
         List<Jogador> sorted = new ArrayList<>(jogo.getJogadores());
         sorted.sort(Comparator
                 .comparingInt(Jogador::getPontosTotais).reversed()
-                .thenComparing(Comparator.comparingInt(Jogador::totalMarcadores).reversed()));
+                .thenComparing(Comparator.comparingInt(Jogador::totalMarcadores).reversed())
+                .thenComparing(byLastEraBands));
 
         List<FinalStandingDto> out = new ArrayList<>();
         for (int i = 0; i < sorted.size(); i++) {

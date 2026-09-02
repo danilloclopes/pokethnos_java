@@ -350,6 +350,12 @@ public class GameService {
         int max = ctx.isEvolved() ? 2 : 1;
         List<String> ids = cardIds == null ? List.of() : cardIds;
         if (ids.size() > max) throw new InvalidActionException("Você só pode remover até " + max + " carta(s).");
+        // regras.html "Veneno Paralisante" (base): remover 1 carta é obrigatório
+        // (o texto Evoluído usa "até 2", já opcional). Só dispensa quando não
+        // há nenhuma carta face para cima elegível na mesa.
+        if (!ctx.isEvolved() && ids.isEmpty() && !jogo.tableCards().isEmpty()) {
+            throw new InvalidActionException("Escolha 1 carta da mesa para remover (Veneno Paralisante).");
+        }
 
         for (String id : ids) {
             boolean onTable = jogo.tableCards().stream().anyMatch(c -> eq(c.getId(), id));
@@ -424,9 +430,11 @@ public class GameService {
         requirePlaying(jogo);
         if (!jogo.isSecondBand()) throw new InvalidActionException("Nenhum segundo Bando em andamento.");
         requireTurnState(jogo, GerenciadorJogo.TurnState.BUILDING_BAND);
-        // Nota: fiel ao original — o 2° Bando (Golpe Duplo) não reaplica a
-        // validação de "mesma cor OU mesma classe" feita no 1° Bando.
-        if (jogo.getBandoAtual().getCartas().isEmpty()) throw new InvalidActionException("Adicione ao menos 1 carta!");
+        Bando segundoBando = jogo.getBandoAtual();
+        if (segundoBando.getCartas().isEmpty()) throw new InvalidActionException("Adicione ao menos 1 carta!");
+        // regras.html "Golpe Duplo": "O segundo Bando segue as regras normais" —
+        // mesma cor OU mesma Classe, igual ao Bando principal.
+        if (!segundoBando.ehValido()) throw new InvalidActionException("Bando inválido! Todas as cartas devem ter a mesma cor OU a mesma Classe.");
 
         jogo.setTurnState(GerenciadorJogo.TurnState.CHOOSE_LEADER);
         jogo.setPendingDecision(PendingDecision.CHOOSE_LEADER_SECOND);
@@ -456,12 +464,6 @@ public class GameService {
         jogo.getBandsPlayedThisEra().get(jogo.getCurrentPlayerIdx()).add(effectiveBandSize);
 
         String leaderRegion = leader.getRegionId();
-        boolean canPlace = effectiveBandSize > p.getMarcadores(leaderRegion);
-        if (canPlace) {
-            p.adicionarMarcador(leaderRegion);
-            registrarProcedencia(jogo, p, leaderRegion);
-            jogo.log(p.getNome() + " (2°Bando) colocou marcador em " + regionName(jogo, leaderRegion) + ".");
-        }
         jogo.log(p.getNome() + " jogou 2° Bando de " + bandSize + " carta(s).");
 
         TurnContext ctx = new TurnContext();
@@ -469,15 +471,28 @@ public class GameService {
         ctx.setBandSize(bandSize);
         ctx.setEffectiveBandSize(effectiveBandSize);
         ctx.setLeaderRegionId(leaderRegion);
-        ctx.setCanPlace(false); // marcador já resolvido manualmente acima — sem despacho de resolverRegiao
         ctx.setEvolved(leader.isEvolved());
         ctx.setSecondBand(true);
         jogo.setTurnContext(ctx);
 
         if (jogo.isLutadorEvolvedSecondBand()) {
+            // "Combo Devastador" (regras.html): a habilidade do Líder é ativada
+            // normalmente no 2° Bando, incluindo a resolução de região (ex.: a
+            // Planagem dos Voadores ou a compra dos Psíquicos), pelo mesmo
+            // fluxo usado no Bando principal.
+            ctx.setCanPlace(effectiveBandSize > p.getMarcadores(leaderRegion));
             jogo.log(p.getNome() + " 2°Bando ativa habilidade (Lutador Evoluído)!");
-            advanceAbilityEffect(jogo, leader, ctx);
+            advanceRegionResolution(jogo, leader, ctx);
         } else {
+            // "Golpe Duplo" (base): a habilidade do Líder NÃO é ativada, então o
+            // marcador segue apenas a regra padrão (região do próprio Líder).
+            boolean canPlace = effectiveBandSize > p.getMarcadores(leaderRegion);
+            ctx.setCanPlace(false);
+            if (canPlace) {
+                p.adicionarMarcador(leaderRegion);
+                registrarProcedencia(jogo, p, leaderRegion);
+                jogo.log(p.getNome() + " (2°Bando) colocou marcador em " + regionName(jogo, leaderRegion) + ".");
+            }
             com.pokethnos.strategy.EstrategiaHabilidade.descartarMaoJogadorAtual(jogo);
             concludeSecondBand(jogo);
         }
